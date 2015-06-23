@@ -4,3 +4,7 @@ cover/*
 *.pyc
 notebooks/.ipynb*
 notebooks/*pickle
+breze.egg-info/dependency_links.txt
+breze.egg-info/SOURCES.txt
+breze.egg-info/PKG-INFO
+breze.egg-info/top_level.txt
