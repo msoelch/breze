@@ -62,6 +62,7 @@ from breze.arch.component.transfer import diag_gauss
 from breze.arch.component.varprop.transfer import sigmoid
 from breze.arch.component.varprop.loss import (
     diag_gaussian_nll as diag_gauss_nll, bern_ces)
+from breze.arch.component.varprop.loss import unpack_mean_var
 
 from breze.arch.util import ParameterSet
 from breze.learn.utils import theano_floatx
@@ -346,6 +347,49 @@ class BernoulliVisibleAssumption(object):
         else:
             return sample
 
+class DiagLaplaceVisibleAssumption(object):
+
+    def statify_visible(self, X, var=None):
+        if var is None:
+            return diag_gauss(X)
+        else:
+            return X, var
+
+    def nll_gen_model(self, X, stt):
+        latent_mean, latent_sigma = unpack_mean_var(stt)
+        ll = -2*latent_sigma - T.abs_(X-latent_mean) / latent_sigma
+
+        return diag_gauss_nll(X, stt, 1e-4)
+
+    def visible_layer_size(self, n_latents):
+        """Return the cardinality of the sufficient statistics given we want to
+        model ``n_latents`` variables.
+
+        For example, a diagonal Gaussian needs two sufficient statistics for a
+        single random variable, the mean and the variance. A Bernoulli only
+        needs one, which is the probability of it being 0 or 1."""
+        return n_latents
+
+    def sample_visibles(self, stt, rng):
+        stt_flat = assert_no_time(stt)
+        n_latent = stt_flat.shape[1] // 2
+        latent_mu = stt_flat[:, :n_latent]
+        latent_sigma = stt_flat[:, n_latent:]
+        noise = rng.uniform(size=latent_mu.shape) - .5
+        sample = latent_mu - latent_sigma*T.sgn(noise)*T.log(1-2*T.abs_(noise))
+        if stt.ndim == 3:
+            return recover_time(sample, stt.shape[0])
+        else:
+            return sample
+
+    def mode_visibles(self, stt):
+        stt_flat = assert_no_time(stt)
+        n_latent = stt_flat.shape[1] // 2
+        mode = stt_flat[:, :n_latent]
+        if stt.ndim == 3:
+            return recover_time(mode, stt.shape[0])
+        else:
+            return mode
 
 class GenericVariationalAutoEncoder(
     UnsupervisedModel, TransformBrezeWrapperMixin,
@@ -768,10 +812,10 @@ class StochasticRnn(GenericVariationalAutoEncoder):
             raise ValueError('prefix is not None')
         if not visible_map:
             raise ValueError('no visible sampling yet')
-        if not isinstance(self.assumptions, DiagGaussLatentAssumption):
-            raise ValueError('only for latent gauss assumption')
-        if not isinstance(self.assumptions, DiagGaussVisibleAssumption):
-            raise ValueError('only for visible gauss assumption')
+        #if not isinstance(self.assumptions, DiagGaussLatentAssumption):
+        #    raise ValueError('only for latent gauss assumption')
+        #if not isinstance(self.assumptions, DiagGaussVisibleAssumption):
+        #    raise ValueError('only for visible gauss assumption')
 
         if not hasattr(self, 'f_gen'):
             gen_expr = T.concatenate(self.vae.gen.outputs, 2)
