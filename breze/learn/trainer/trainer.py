@@ -147,6 +147,9 @@ class Trainer(object):
         self.stopped = False
         self.interrupted = False
 
+        self.start = None
+        self.interruptions = []
+
     def score(self, *data):
         return self._score(self.model.score, *data)
 
@@ -187,11 +190,14 @@ class Trainer(object):
         The values yielded from this function will be climin info dictionaries
         stripped from any numpy or gnumpy arrays.
         """
+        if self.start is None:
+            self.start = time.time()
+
         for info in self.model.iter_fit(*fit_data, info_opt=self.current_info):
              self.interrupted = self.interrupted or self.interrupt(info)
              if self.pause(info) or self.interrupted:
-                 info['val_loss'] = ma.scalar(self.score(*self.data[self.val_key]))
-        
+                info['val_loss'] = ma.scalar(self.score(*self.data[self.val_key]))
+
                 cur_val_loss = info['%s_loss' % self.val_key]
                 if cur_val_loss < self.best_loss:
                     self.best_loss = cur_val_loss
@@ -201,6 +207,7 @@ class Trainer(object):
                 info['best_pars'] = self.best_pars
 
                 info.update({
+                    'time': self.runtime(),
                     'datetime': datetime.datetime.now(),
                 })
 
@@ -215,6 +222,9 @@ class Trainer(object):
                     break
                 if self.interrupted:
                     break
+
+    def runtime(self):
+        return time.time() - self.start - sum(self.interruptions)
 
     def __getstate__(self):
         state = self.__dict__.copy()
