@@ -211,6 +211,7 @@ class StochasticRnn(GenericVariationalAutoEncoder):
                 on_unused_input ='warn')
 
             out = self.vae.gen.sample() if not visible_map else self.vae.gen.maximum
+            out = T.tanh(out)
             self._f_visible_sample_by_gen_output = self.function(
                 [self.vae.gen.rnn.output], out,
                 on_unused_input ='warn')
