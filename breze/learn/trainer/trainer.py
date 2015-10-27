@@ -5,6 +5,8 @@
 import datetime
 import time
 
+import numpy as np
+
 from climin import mathadapt as ma
 from climin.stops import never, always
 from climin.util import clear_info
@@ -132,6 +134,8 @@ class Trainer(object):
         self.model = model
         self.data = data
 
+        self.data = data
+
         self._score = score
         self.pause = pause
         self.stop = stop
@@ -145,7 +149,10 @@ class Trainer(object):
         self.infos = []
         self.current_info = None
 
+
         self.val_key = 'val' # None, set from outside?
+        self.info_keys = []
+
         self.stopped = False
 
     def score(self, *data):
@@ -156,6 +163,7 @@ class Trainer(object):
 
         Termination will occur when either stop or interrupt is True. During
         each pause, ``.report(info)`` will be executed."""
+
         for i in self.iter_fit(*self.data['train']):
             self.report(i)
 
@@ -167,24 +175,6 @@ class Trainer(object):
     def iter_fit(self, *fit_data):
         """Iteratively fit the given training data.
 
-        Generator function containing the main logic of the Trainer object.
-
-        The arguments are of variable length and have to match that of the
-        ``model.iter_fit()`` and ultimately the used loss function of that
-        model.
-
-        Each iteration of the fitting constitutes of running the optimizer of
-        the model until either interrupt or pause returns True.
-
-        In both cases, the generator will yield to the user. Additionally:
-
-            - If interrupt returns True, the generator will stop yielding
-            values afterwards.
-            - stop will be tested. If it is true it will stop yielding
-            afterwards and additionally ``.stopped`` will be set to True
-            afterwards.
-            - ``best_pars`` and ``best_loss`` will be updated.
-
         The values yielded from this function will be climin info dictionaries
         stripped from any numpy or gnumpy arrays.
         """
@@ -193,7 +183,14 @@ class Trainer(object):
         for info in self.model.iter_fit(*fit_data, info_opt=self.current_info):
             interrupt = self.interrupt(info)
             if self.pause(info) or interrupt:
-                info['val_loss'] = ma.scalar(self.score(*self.data[self.val_key]))
+                info['val_loss'] = ma.scalar(
+                    self.model._f_loss(self.model.parameters.data, *self.data[self.val_key]))
+
+                for i in self.info_keys:
+                    info['{}_loss'.format(i)] = ma.scalar(
+                        self.model._f_loss(
+                            self.model.parameters.data,
+                            *self.data[i]))
 
                 cur_val_loss = info['%s_loss' % self.val_key]
                 if cur_val_loss < self.best_loss:
@@ -225,3 +222,4 @@ class Trainer(object):
         state = self.__dict__.copy()
         del state['data']
         return state
+
